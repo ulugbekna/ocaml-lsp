@@ -1,6 +1,9 @@
 language: c
 install: wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-docker.sh
-script: bash -ex .travis-docker.sh
+script: |
+  bash -ex .travis-opam.sh
+  make fmt-check
+  if [ "$E2E" = "true" ]; then make test; fi
 services:
   - docker
 env:
@@ -8,7 +11,7 @@ env:
     - DISTRO="debian-stable"
     - PINS="lsp.dev:. ocaml-lsp-server.dev:."
   matrix:
-    - PACKAGE="ocaml-lsp-server" OCAML_VERSION="4.06"
-    - PACKAGE="ocaml-lsp-server" OCAML_VERSION="4.07"
-    - PACKAGE="ocaml-lsp-server" OCAML_VERSION="4.08"
-    - PACKAGE="ocaml-lsp-server" OCAML_VERSION="4.09"
+    # - PACKAGE="ocaml-lsp-server" OCAML_VERSION="4.06"
+    # - PACKAGE="ocaml-lsp-server" OCAML_VERSION="4.07"
+    - PACKAGE="ocaml-lsp-server" OCAML_VERSION="4.08" E2E="true"
+    # - PACKAGE="ocaml-lsp-server" OCAML_VERSION="4.09" E2E="true"
