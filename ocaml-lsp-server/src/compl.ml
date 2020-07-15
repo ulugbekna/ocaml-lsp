@@ -54,13 +54,30 @@ let prefix_of_position ~short_path source position =
         find prefix (i - 1)
       else
         let ch = text.[i] in
-        (* The characters for an infix function are missing *)
         match ch with
         | 'a' .. 'z'
         | 'A' .. 'Z'
         | '0' .. '9'
         | '\''
-        | '_' ->
+        | '_'
+        (* Infix function characters *)
+        | '$'
+        | '&'
+        | '*'
+        | '+'
+        | '-'
+        | '/'
+        | '='
+        | '>'
+        | '@'
+        | '^'
+        | '!'
+        | '?'
+        | '%'
+        | '<'
+        | ':'
+        | '~'
+        | '#' ->
           find (ch :: prefix) (i - 1)
         | '.' ->
           if short_path then
@@ -145,7 +162,16 @@ let complete doc lsp_position =
     in
     Query_commands.dispatch pipeline complete
   in
-  let items = completion.entries |> List.map ~f:(fun entry -> `Keep entry) in
+  (* let range = range_prefix lsp_position prefix in let items =
+     completion.entries |> List.map ~f:(fun entry -> `Replace (range, entry)) in *)
+  let items =
+    completion.entries
+    |> List.map ~f:(fun (entry : Query_protocol.Compl.entry) ->
+           if entry.name.[0] = '>' then
+             `Replace (range_prefix lsp_position prefix, entry)
+           else
+             `Keep entry)
+  in
   let items =
     match completion.context with
     | `Unknown -> items
