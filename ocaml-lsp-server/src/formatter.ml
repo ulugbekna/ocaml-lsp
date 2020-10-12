@@ -41,9 +41,8 @@ type error =
   | Unsupported_syntax of Document.Syntax.t
   | Missing_binary of { binary : string }
   | Unexpected_result of { message : string }
-  | Unknown_extension of Uri.t
 
-let message = function
+let string_of_error = function
   | Unsupported_syntax syntax ->
     sprintf "formatting %s files is not supported"
       (Document.Syntax.human_name syntax)
@@ -52,9 +51,6 @@ let message = function
       "Unable to find %s binary. You need to install %s manually to use the \
        formatting feature."
       binary binary
-  | Unknown_extension uri ->
-    Printf.sprintf "Unable to format. File %s has an unknown extension"
-      (Uri.to_path uri)
   | Unexpected_result { message } -> message
 
 type formatter =
@@ -101,3 +97,23 @@ let run doc =
   let* binary = binary formatter in
   let contents = Document.source doc |> Msource.text in
   exec binary args contents
+
+let jsonrpc_error e =
+  let message = string_of_error e in
+  Jsonrpc.Response.Error.make ~code:InvalidRequest ~message ()
+
+let run rpc doc =
+  match run doc with
+  | Error e -> Error (jsonrpc_error e)
+  | Ok result ->
+    let pos line col = { Position.character = col; line } in
+    let range =
+      let start_pos = pos 0 0 in
+      match Msource.get_logical (Document.source doc) `End with
+      | `Logical (l, c) ->
+        let end_pos = pos l c in
+        { Range.start = start_pos; end_ = end_pos }
+    in
+    let change = { TextEdit.newText = result; range } in
+    let state = Server.state rpc in
+    Ok (Some [ change ], state)

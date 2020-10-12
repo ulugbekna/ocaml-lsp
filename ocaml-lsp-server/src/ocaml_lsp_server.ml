@@ -171,45 +171,6 @@ let code_action server (params : CodeActionParams.t) =
     in
     (action, state)
 
-module Formatter = struct
-  let jsonrpc_error (e : Fmt.error) =
-    let message = Fmt.message e in
-    let code : Jsonrpc.Response.Error.Code.t =
-      match e with
-      | Unsupported_syntax _
-      | Unknown_extension _
-      | Missing_binary _ ->
-        InvalidRequest
-      | Unexpected_result _ -> InternalError
-    in
-    make_error ~code ~message ()
-
-  let run rpc doc =
-    match Fmt.run doc with
-    | Result.Error e ->
-      let message = Fmt.message e in
-      let error = jsonrpc_error e in
-      let msg = ShowMessageParams.create ~message ~type_:Error in
-      let (_ : unit Fiber.t) =
-        let state : State.t = Server.state rpc in
-        Scheduler.detach state.scheduler (fun () ->
-            Server.notification rpc (ShowMessage msg))
-      in
-      Error error
-    | Result.Ok result ->
-      let pos line col = { Position.character = col; line } in
-      let range =
-        let start_pos = pos 0 0 in
-        match Msource.get_logical (Document.source doc) `End with
-        | `Logical (l, c) ->
-          let end_pos = pos l c in
-          { Range.start = start_pos; end_ = end_pos }
-      in
-      let change = { TextEdit.newText = result; range } in
-      let state = Server.state rpc in
-      Ok (Some [ change ], state)
-end
-
 let markdown_support (client_capabilities : ClientCapabilities.t) ~field =
   match client_capabilities.textDocument with
   | None -> false
