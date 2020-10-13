@@ -6,14 +6,14 @@ type t =
   | ShowMessage of ShowMessageParams.t
   | LogMessage of ShowMessageParams.t
   | TelemetryNotification of Json.t
-  | Unknown_notification of Jsonrpc.Message.notification
+  | Generic_notification of Jsonrpc.Message.notification
 
 let method_ = function
   | ShowMessage _ -> "window/showMessage"
   | PublishDiagnostics _ -> "textDocument/publishDiagnostics"
   | LogMessage _ -> "window/logMessage"
   | TelemetryNotification _ -> "telemetry/event"
-  | Unknown_notification _ -> assert false
+  | Generic_notification { method_; _ } -> method_
 
 let yojson_of_t = function
   | LogMessage params
@@ -21,7 +21,10 @@ let yojson_of_t = function
     ShowMessageParams.yojson_of_t params
   | PublishDiagnostics params -> PublishDiagnosticsParams.yojson_of_t params
   | TelemetryNotification params -> params
-  | Unknown_notification _ -> assert false
+  | Generic_notification { id = (); method_; params = None } ->
+    `Assoc [ ("method", `String method_) ]
+  | Generic_notification { id = (); method_; params = Some params } ->
+    `Assoc [ ("method", `String method_); ("params", params) ]
 
 let to_jsonrpc t =
   let method_ = method_ t in
@@ -45,4 +48,4 @@ let of_jsonrpc (r : Jsonrpc.Message.notification) =
   | "telemetry/event" ->
     let+ params = Jsonrpc.Message.params r (fun x -> x) in
     TelemetryNotification params
-  | _ -> Ok (Unknown_notification r)
+  | _ -> Ok (Generic_notification r)
