@@ -143,3 +143,8 @@ let run rpc doc =
   in
   log ~title:Logger.Title.Debug "sent response";
   response
+
+(* FIXME: (to discuss): Currently, if the user switches from one file to
+   another, the ocamlformat status remains the same (success - tick, failure -
+   cross); should we clean state (by sending a notif) when user switches to
+   another file? *)
