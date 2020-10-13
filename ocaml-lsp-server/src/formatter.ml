@@ -102,18 +102,44 @@ let jsonrpc_error e =
   let message = string_of_error e in
   Jsonrpc.Response.Error.make ~code:InvalidRequest ~message ()
 
+let ocamlformat_failure (err : string (* FIXME *)) =
+  Server_notification.Generic_notification
+    { id = ()
+    ; method_ = "ocamlformat/update-failure"
+    ; params = Some (`String err)
+    }
+
+let ocamlformat_success =
+  Server_notification.Generic_notification
+    { id = (); method_ = "ocamlformat/update-success"; params = None }
+
 let run rpc doc =
-  match run doc with
-  | Error e -> Error (jsonrpc_error e)
-  | Ok result ->
-    let pos line col = { Position.character = col; line } in
-    let range =
-      let start_pos = pos 0 0 in
-      match Msource.get_logical (Document.source doc) `End with
-      | `Logical (l, c) ->
-        let end_pos = pos l c in
-        { Range.start = start_pos; end_ = end_pos }
-    in
-    let change = { TextEdit.newText = result; range } in
-    let state = Server.state rpc in
-    Ok (Some [ change ], state)
+  let response, notif =
+    match run doc with
+    | Error e ->
+      let err_msg = string_of_error e in
+      let ocamlformat_failure = ocamlformat_failure err_msg in
+      (Error (jsonrpc_error e), ocamlformat_failure)
+    | Ok result ->
+      let pos line col = { Position.character = col; line } in
+      let range =
+        let start_pos = pos 0 0 in
+        match Msource.get_logical (Document.source doc) `End with
+        | `Logical (l, c) ->
+          let end_pos = pos l c in
+          { Range.start = start_pos; end_ = end_pos }
+      in
+      let change = { TextEdit.newText = result; range } in
+      let state = Server.state rpc in
+      (Ok (Some [ change ], state), ocamlformat_success)
+  in
+  (* As we can't work with direct server response in vscode-languageclient, we
+     have to send our own update *)
+  let (_ : unit Fiber.t) =
+    let state : State.t = Server.state rpc in
+    Scheduler.detach state.scheduler (fun () ->
+        log ~title:Logger.Title.Debug "detched send notif";
+        Server.notification rpc notif)
+  in
+  log ~title:Logger.Title.Debug "sent response";
+  response
